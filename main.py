@@ -1,80 +1,110 @@
-# main.py en GitHub - VERSIÓN CORREGIDA PARA RENDER
+# ==============================================================================
+# --- CEREBRO DEL ASISTENTE (BACKEND) - VERSIÓN FINAL ---
+# ==============================================================================
 
-# 1. Importar las herramientas necesarias
+# 1. Importar las herramientas necesarias del servidor y de la IA
 from flask import Flask, request, jsonify
 import os
 from openai import OpenAI
 import json
 import tempfile
 
-# 2. Crear la aplicación web
-app = Flask(__name__) # La variable 'app' es la que Gunicorn busca
+# 2. Crear la aplicación web con Flask
+# La variable 'app' es la que Gunicorn buscará y ejecutará en Render.
+app = Flask(__name__)
 
-# 3. Cargar la API Key de forma segura desde los "Secrets"
+# 3. Cargar la clave de API de forma segura desde las variables de entorno de Render
 api_key_openrouter = os.environ.get("OPENROUTER_API_KEY")
 
-# Verificar si la clave se cargó correctamente
+# Verificación inicial para asegurarnos de que la clave se cargó al iniciar el servidor
 if not api_key_openrouter:
-    print("¡ALERTA! La OPENROUTER_API_KEY no se encontró en las variables de entorno.")
+    print("¡ALERTA CRÍTICA! La variable de entorno OPENROUTER_API_KEY no se encontró.")
 
-# 4. Preparar los clientes para hablar con la IA de OpenRouter
-# Cliente para los modelos de LENGUAJE
-client_language = OpenAI(
-    api_key=api_key_openrouter,
-    base_url="https://openrouter.ai/api/v1",
-)
-# Cliente para la transcripción de AUDIO (Whisper)
-client_audio = OpenAI(
+# 4. Preparar el cliente para hablar con la IA de OpenRouter
+# Usaremos el mismo cliente para el lenguaje y el audio, ya que ambos usan la misma API key y base_url.
+client = OpenAI(
     api_key=api_key_openrouter,
     base_url="https://openrouter.ai/api/v1",
 )
 
-# --- RUTA PARA LA TRANSCRIPCIÓN DE AUDIO ---
+# ==============================================================================
+# --- RUTAS DE LA API (LOS "PODERES" DE NUESTRO CEREBRO) ---
+# ==============================================================================
+
+# --- RUTA 1: TRANSCRIPCIÓN DE AUDIO (ESCUCHA MEJORADA) ---
 @app.route('/transcribe-audio', methods=['POST'])
 def transcribe_audio():
+    # Verifica que el frontend envió un archivo de audio
     if 'audio' not in request.files:
-        return jsonify({"error": "No se encontró el archivo de audio"}), 400
+        return jsonify({"error": "Petición inválida: No se envió ningún archivo de audio."}), 400
+    
     audio_file = request.files['audio']
+    
+    # Guarda el archivo de audio recibido en un archivo temporal para procesarlo
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as temp_audio:
         audio_file.save(temp_audio.name)
+        
         try:
+            # Abre el archivo temporal y lo envía a la API de Whisper a través de OpenRouter
             with open(temp_audio.name, "rb") as file_to_transcribe:
-                transcription = client_audio.audio.transcriptions.create(
-                    model="openai/whisper-1",
+                print("[Backend] Recibido audio. Enviando a Whisper para transcripción...")
+                
+                transcription = client.audio.transcriptions.create(
+                    model="openai/whisper-1",  # El modelo de transcripción de OpenAI
                     file=file_to_transcribe,
-                    language="es"
+                    language="es"  # Especificamos español para mejorar la precisión
                 )
+                
+            print(f"[Backend] Texto transcrito: '{transcription.text}'")
+            # Devuelve el texto transcrito al frontend
             return jsonify({"text": transcription.text})
+
         except Exception as e:
-            print(f"Error durante la transcripción: {e}")
+            print(f"[Backend ERROR] Error durante la transcripción: {e}")
             return jsonify({"error": str(e)}), 500
 
-# --- RUTA PARA PROCESAR COMANDOS ---
+# --- RUTA 2: PROCESAMIENTO DE COMANDOS (PENSAMIENTO DE LA IA) ---
 @app.route('/process-command', methods=['POST'])
 def process_command():
+    # Obtiene los datos (historial de chat y lista de herramientas) del frontend
     data = request.get_json()
+    
+    # Valida que los datos necesarios fueron enviados
     if not data or 'history' not in data or 'tools' not in data:
-        return jsonify({"error": "Petición inválida"}), 400
+        return jsonify({"error": "Petición inválida: Faltan datos de historial o herramientas."}), 400
+        
     try:
-        MODELO_GRATUITO = "deepseek/deepseek-r1-0528-qwen3-8b:free"
-        response = client_language.chat.completions.create(
-            model=MODELO_GRATUITO,
-            messages=data['history'],
-            tools=data['tools'],
-            tool_choice="auto"
-        )
-        return jsonify(json.loads(response.to_json()))
-    except Exception as e:
-        print(f"Error al contactar la IA: {e}")
-        return jsonify({"error": str(e)}), 500
+        # ¡LA ELECCIÓN MÁS IMPORTANTE! Usamos un modelo que SÍ soporta el uso de herramientas.
+        MODELO_COMPATIBLE = "mistralai/mistral-7b-instruct:free"
 
-# --- RUTA DE BIENVENIDA ---
+        print(f"[Backend] Procesando comando con el modelo: {MODELO_COMPATIBLE}")
+
+        # Hacemos la llamada a la IA con el historial y las herramientas
+        response = client.chat.completions.create(
+            model=MODELO_COMPATIBLE,
+            messages=data['history'],
+            tools=data['tools']
+        )
+        
+        # Devuelve la respuesta completa de la IA al frontend
+        return jsonify(json.loads(response.to_json()))
+        
+    except Exception as e:
+        # Si algo sale mal, lo imprimimos en los logs de Render para poder verlo
+        print(f"***** ERROR INTERNO DEL SERVIDOR EN /process-command *****")
+        print(f"Tipo de error: {type(e).__name__}")
+        print(f"Mensaje de error: {str(e)}")
+        print(f"*****************************************************")
+        # Y devolvemos un mensaje de error genérico al frontend
+        return jsonify({"error": "Ocurrió un problema interno en el cerebro del asistente."}), 500
+
+# --- RUTA 3: PÁGINA DE INICIO (PARA VERIFICAR QUE ESTÁ VIVO) ---
 @app.route('/')
 def index():
-    return "El cerebro del asistente (v2 con Whisper) está activo y en línea."
-
-# --- BLOQUE PARA EJECUCIÓN ---
-# Esta sección solo se ejecuta si corres el archivo directamente (ej: python main.py)
-# Gunicorn ignora este bloque y usa directamente la variable 'app' de arriba.
+    return "El cerebro del asistente está activo y en línea. ¡Listo para recibir comandos!"
+    
+# --- BLOQUE DE EJECUCIÓN ---
+# Esta sección solo se ejecuta si corres el archivo directamente en un PC (python main.py)
+# Cuando Render usa Gunicorn, este bloque se ignora, y Gunicorn usa directamente la variable 'app'.
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
