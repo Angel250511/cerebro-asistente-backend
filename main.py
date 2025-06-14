@@ -70,28 +70,33 @@ def process_command():
     
     if not data or 'history' not in data or 'tools' not in data:
         return jsonify({"error": "Petición inválida: Faltan datos de historial o herramientas."}), 400
+    
+    # Verificamos si se pidió una respuesta en streaming
+    stream = data.get("stream", False)
         
     try:
-        # La elección final del cerebro: potente, rápido y con un excelente nivel gratuito.
         MODELO_COMPATIBLE = "anthropic/claude-3-haiku" 
-
-        print(f"[Backend] Procesando comando con el modelo: {MODELO_COMPATIBLE}")
+        print(f"[Backend] Procesando comando con el modelo: {MODELO_COMPATIBLE} (Stream: {stream})")
 
         response = client.chat.completions.create(
             model=MODELO_COMPATIBLE,
             messages=data['history'],
-            tools=data['tools']
+            tools=data['tools'],
+            stream=stream # Pasamos el parámetro stream a la API
         )
         
-        return jsonify(json.loads(response.to_json()))
+        if stream:
+            # Si es un stream, devolvemos una respuesta en streaming
+            def generate():
+                for chunk in response:
+                    yield f"data: {chunk.json()}\n\n"
+            return Response(generate(), mimetype='text/event-stream')
+        else:
+            # Si no es un stream, devolvemos la respuesta completa
+            return jsonify(json.loads(response.to_json()))
         
     except Exception as e:
         print(f"***** ERROR INTERNO DEL SERVIDOR EN /process-command *****")
-        print(f"Tipo de error: {type(e).__name__}")
-        print(f"Mensaje de error: {str(e)}")
-        print(f"*****************************************************")
-        return jsonify({"error": "Ocurrió un problema interno en el cerebro del asistente."}), 500
-
 # --- RUTA 3: PÁGINA DE INICIO (PARA VERIFICAR QUE ESTÁ VIVO) ---
 @app.route('/')
 def index():
