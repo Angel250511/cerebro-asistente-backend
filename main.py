@@ -75,7 +75,7 @@ def process_command():
         
     try:
         # ¡LA ELECCIÓN MÁS IMPORTANTE! Usamos un modelo que SÍ soporta el uso de herramientas.
-        MODELO_COMPATIBLE = "mistralai/mistral-7b-instruct:free"
+        MODELO_COMPATIBLE = "google/gemini-pro"
 
         print(f"[Backend] Procesando comando con el modelo: {MODELO_COMPATIBLE}")
 
