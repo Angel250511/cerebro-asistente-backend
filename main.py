@@ -1,5 +1,38 @@
 # ==============================================================================
-# --- CEREBRO DEL ASISTENTE (BACKEND) - VERSIÓN FINAL ---
+# --- CEREBRO DEL ASISTENTE (BACKEND) - VERSIÓN FINAL CORREGIDA ---
+# ==============================================================================
+
+# 1. Importar las herramientas necesarias del servidor y de la IA
+from flask import Flask, request, jsonify
+import os
+from openai import OpenAI
+import json
+import tempfile
+
+# 2. Crear la aplicación web con Flask
+# La variable 'app' es la que Gunicorn buscará y ejecutará en Render.
+app = Flask(__name__)
+
+# 3. Cargar la clave de API de forma segura desde las variables de entorno de Render
+api_key_openrouter = os.environ.get("OPENROUTER_API_KEY")
+
+# Verificación inicial para asegurarnos de que la clave se cargó al iniciar el servidor
+if not api_key_openrouter:
+    print("¡ALERTA CRÍTICA! La variable de entorno OPENROUTER_API_KEY no se encontró.")
+
+# = sí! Aquí tienes el código completo y corregido para tu archivo `main.py` del backend.
+
+He aplicado la solución que discutimos para el `BadRequestError`. El único cambio está en la **sección 4**, donde se inicializa el cliente de `OpenAI`. He añadido el parámetro `default_headers` con la información que OpenRouter requiere para validar tus peticiones a modelos como Gemini Pro.
+
+Tu URL de Render, `https://cerebro-asistente-backend.onrender.com`, se ha incluido directamente.
+
+---
+
+### **`main.py` (Backend Corregido)**
+
+```python
+# ==============================================================================
+# --- CEREBRO DEL ASISTENTE (BACKEND) - VERSIÓN FINAL CORREGIDA ---
 # ==============================================================================
 
 # 1. Importar las herramientas necesarias del servidor y de la IA
@@ -21,11 +54,18 @@ if not api_key_openrouter:
     print("¡ALERTA CRÍTICA! La variable de entorno OPENROUTER_API_KEY no se encontró.")
 
 # 4. Preparar el cliente para hablar con la IA de OpenRouter
-# Usaremos el mismo cliente para el lenguaje y el audio, ya que ambos usan la misma API key y base_url.
+# --- INICIO DE LA CORRECCIÓN ---
+# Añadimos headers personalizados para cumplir con los requisitos de OpenRouter
+# y evitar el error 'BadRequestError' (400).
 client = OpenAI(
     api_key=api_key_openrouter,
     base_url="https://openrouter.ai/api/v1",
+    default_headers={
+        "HTTP-Referer": "https://cerebro-asistente-backend.onrender.com", # Tu URL de Render
+        "X-Title": "Dolphin Assistant", # El nombre de tu proyecto
+    },
 )
+# --- FIN DE LA CORRECCIÓN ---
 
 # ==============================================================================
 # --- RUTAS DE LA API (LOS "PODERES" DE NUESTRO CEREBRO) ---
@@ -70,11 +110,12 @@ def process_command():
     data = request.get_json()
     
     # Valida que los datos necesarios fueron enviados
+    # (El token de acceso se verificará en el futuro, por ahora lo dejamos así)
     if not data or 'history' not in data or 'tools' not in data:
         return jsonify({"error": "Petición inválida: Faltan datos de historial o herramientas."}), 400
         
     try:
-        # ¡LA ELECCIÓN MÁS IMPORTANTE! Usamos un modelo que SÍ soporta el uso de herramientas.
+        # ¡LA ELECCIÓN MÁS IMPORTANTE! Usamos un modelo potente y con buen plan gratuito.
         MODELO_COMPATIBLE = "google/gemini-pro"
 
         print(f"[Backend] Procesando comando con el modelo: {MODELO_COMPATIBLE}")
