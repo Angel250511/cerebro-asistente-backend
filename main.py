@@ -45,7 +45,7 @@ def process_command():
         return jsonify({"error": "Petición inválida."}), 400
         
     try:
-        MODELO_COMPATIBLE = "anthropic/claude-3-haiku" 
+        MODELO_COMPATIBLE = "google/gemma-3–4b-it:free" 
         print(f"[Backend] Procesando comando con el modelo: {MODELO_COMPATIBLE}")
 
         response = client.chat.completions.create(
